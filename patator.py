@@ -898,6 +898,7 @@ import multiprocessing
 import signal
 import ctypes
 import glob
+import time as timemodule
 from xml.sax.saxutils import escape as xmlescape, quoteattr as xmlquoteattr
 try:
   # python3+
@@ -1939,6 +1940,7 @@ Please read the README inside for more examples and usage information.
     while len(multiprocessing.active_children()) > 3 and not self.ns.quit_now:
       self.report_progress()
       self.monitor_interaction()
+      timemodule.sleep(60)
 
   def report_progress(self):
     for i, pq in enumerate(self.thread_report):
@@ -1994,59 +1996,7 @@ Please read the README inside for more examples and usage information.
 
 
   def monitor_interaction(self):
-
-    if on_windows():
-      import msvcrt
-      if not msvcrt.kbhit():
-        sleep(.1)
-        return
-
-      command = msvcrt.getche()
-      if command == 'x':
-        command += raw_input()
-
-    else:
-      i, _, _ = select([sys.stdin], [], [], .1)
-      if not i: return
-      command = i[0].readline().strip()
-
-    if command == 'h':
-      logger.info('''Available commands:
-       h       show help
-       <Enter> show progress
-       d/D     increase/decrease debug level
-       p       pause progress
-       f       show verbose progress
-       x arg   add monitor condition
-       a       show all active conditions
-       q       terminate execution now
-       ''')
-
-    elif command == 'q':
-      self.ns.quit_now = True
-
-    elif command == 'p':
-      self.ns.paused = not self.ns.paused
-      logger.info(self.ns.paused and 'Paused' or 'Unpaused')
-
-    elif command == 'd':
-      logger.setLevel(logging.DEBUG)
-
-    elif command == 'D':
-      logger.setLevel(logging.INFO)
-
-    elif command == 'a':
-      logger.info(repr(self.ns.actions))
-
-    elif command.startswith('x'):
-      _, arg = command.split(' ', 1)
-      try:
-        self.update_actions(arg)
-      except ValueError:
-        logger.warn('usage: x actions:conditions')
-
-    else: # show progress
-
+    if True: # show progress
       thread_progress = self.thread_progress
       num_threads = self.num_threads
       total_size = self.ns.total_size
@@ -2070,16 +2020,6 @@ Please read the README inside for more examples and usage information.
         etc_time,
         remain_time,
         self.ns.paused and '| Paused' or ''))
-
-      if command == 'f':
-        for i, p in enumerate(thread_progress):
-          total_count = p.done_count + p.skip_count
-          logger.info(' {0:>3}: {1:>3}% ({2}/{3}) {4}'.format(
-            '#%d' % (i+1),
-            int(100*total_count/(1.0*total_size/num_threads)),
-            total_count,
-            total_size/num_threads,
-            p.current))
 
 # }}}
 
@@ -2355,7 +2295,6 @@ class SSH_login(TCP_Cache):
     return TCP_Connection(fp, fp.remote_version)
 
   def execute(self, host, port='22', user=None, password=None, auth_type='password', keyfile=None, persistent='1'):
-
     try:
       with Timing() as timing:
         fp, banner = self.bind(host, port, user)
