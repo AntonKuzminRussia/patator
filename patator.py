@@ -1016,14 +1016,14 @@ def create_dir(top_path):
   if os.path.isdir(top_path):
     files = os.listdir(top_path)
     if files:
-      if input("Directory '%s' is not empty, do you want to wipe it ? [Y/n]: " % top_path) != 'n':
-        for root, dirs, files in os.walk(top_path):
-          if dirs:
-            print("Directory '%s' contains sub-directories, safely aborting..." % root)
-            sys.exit(0)
-          for f in files:
-            os.unlink(os.path.join(root, f))
-          break
+      for root, dirs, files in os.walk(top_path):
+        if dirs:
+          print("Directory '%s' contains sub-directories, safely aborting..." % root)
+          sys.exit(0)
+        for f in files:
+          os.unlink(os.path.join(root, f))
+        break
+
   else:
     os.mkdir(top_path)
   return top_path
