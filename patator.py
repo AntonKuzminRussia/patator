@@ -646,6 +646,33 @@ TODO
 
 # }}}
 
+import multiprocessing
+
+class GlobalStorage:
+  ec = None
+  l = multiprocessing.Manager().list()
+
+class ErrorsCounter():
+    counter = 0
+    reported = False
+    limit = 100
+
+    def up(self):
+      self.counter += 1
+      if self.limit >= 100 and not self.reported and self.counter/(self.limit/100) > 70:
+          print("\nAttention! Too many errors, 70% of limit!")
+          self.reported = True
+
+    def is_limit(self):
+        return self.counter > self.limit
+
+    def flush(self):
+        print("Flushed err counter")
+        self.counter = 0
+        self.reported = False
+
+GlobalStorage.ec = ErrorsCounter()
+
 # logging {{{
 class Logger:
   def __init__(self, queue):
@@ -894,7 +921,6 @@ import socket
 import subprocess
 import hashlib
 from collections import defaultdict
-import multiprocessing
 import signal
 import ctypes
 import glob
@@ -1610,7 +1636,7 @@ Please read the README inside for more examples and usage information.
       while True:
         active = multiprocessing.active_children()
         self.report_progress()
-        if not len(active) > 2: # SyncManager and LogSvc
+        if not len(active) > 3: # SyncManager and LogSvc
           break
         logger.debug('active: %s' % active)
         sleep(.1)
@@ -1649,20 +1675,19 @@ Please read the README inside for more examples and usage information.
       logger.info('To resume execution, pass --resume %s' % ','.join(resume))
 
     logger.quit()
-    while len(multiprocessing.active_children()) > 1:
-      sleep(.1)
+    while len(multiprocessing.active_children()) > 2:
+      sleep(1)
 
   def push_final(self, resp): pass
   def show_final(self): pass
 
   def start_threads(self):
-
     task_queues = [multiprocessing.Queue(maxsize=10000) for _ in range(self.num_threads)]
 
     # consumers
     for num in range(self.num_threads):
       report_queue = multiprocessing.Queue(maxsize=1000)
-      t = multiprocessing.Process(name='Consumer-%d' % num, target=self.consume, args=(task_queues[num], report_queue, logger.queue))
+      t = multiprocessing.Process(name='Consumer-%d' % num, target=self.consume, args=(task_queues[num], report_queue, logger.queue, GlobalStorage.ec, GlobalStorage.l))
       t.daemon = True
       t.start()
       self.thread_report.append(report_queue)
@@ -1811,7 +1836,7 @@ Please read the README inside for more examples and usage information.
 
     logger.debug('producer exits')
 
-  def consume(self, task_queue, report_queue, log_queue):
+  def consume(self, task_queue, report_queue, log_queue, errors_counter, l):
 
     ignore_ctrlc()
     handle_alarm()
@@ -1827,7 +1852,10 @@ Please read the README inside for more examples and usage information.
       logger.debug('consumer done')
 
     while True:
-      if self.ns.quit_now:
+      if self.ns.quit_now or errors_counter.is_limit():
+        if errors_counter.is_limit():
+          l.append(1)
+        self.ns.quit_now = True
         return shutdown()
 
       try:
@@ -1891,13 +1919,14 @@ Please read the README inside for more examples and usage information.
           try_count += 1
 
           logger.debug('payload: %s [try %d/%d]' % (payload, try_count, self.max_retries+1))
-
           try:
             enable_alarm(self.timeout)
             resp = module.execute(**payload)
 
             disable_alarm()
+            errors_counter.flush()
           except:
+            errors_counter.up()
             disable_alarm()
 
             mesg = '%s %s' % sys.exc_info()[:2]
@@ -1940,7 +1969,7 @@ Please read the README inside for more examples and usage information.
     while len(multiprocessing.active_children()) > 3 and not self.ns.quit_now:
       self.report_progress()
       self.monitor_interaction()
-      timemodule.sleep(60)
+      timemodule.sleep(1)
 
   def report_progress(self):
     for i, pq in enumerate(self.thread_report):
@@ -4874,6 +4903,9 @@ Available modules:
   powder = ctrl(module, [name] + sys.argv[1:])
   powder.fire()
 
+if len(GlobalStorage.l):
+  print("Too many errors")
+  exit(1)
 # }}}
 
 # vim: ts=2 sw=2 sts=2 et fdm=marker bg=dark
