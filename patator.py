@@ -667,7 +667,8 @@ class ErrorsCounter():
         return self.counter > self.limit
 
     def flush(self):
-        print("Flushed err counter")
+        if (self.counter):
+            print("Flushed err counter")
         self.counter = 0
         self.reported = False
 
@@ -1966,7 +1967,7 @@ Please read the README inside for more examples and usage information.
 
   def monitor_progress(self):
     # loop until SyncManager, LogSvc and Producer are the only children left alive
-    while len(multiprocessing.active_children()) > 3 and not self.ns.quit_now:
+    while len(multiprocessing.active_children()) > 4 and not self.ns.quit_now:
       self.report_progress()
       self.monitor_interaction()
       timemodule.sleep(1)
